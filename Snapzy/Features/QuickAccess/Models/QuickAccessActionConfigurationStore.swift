@@ -171,7 +171,7 @@ final class QuickAccessActionConfigurationStore: ObservableObject {
     for slot in QuickAccessActionSlot.allCases {
       let action: QuickAccessActionKind?
       if let rawAction = rawAssignments[slot.rawValue] {
-        action = rawAction.isEmpty ? nil : action(for: rawAction)
+        action = rawAction.isEmpty ? nil : Self.action(for: rawAction)
       } else {
         let defaultAction = QuickAccessActionSlot.defaultAssignments[slot]
         // Preserve a legacy action's assigned slot instead of claiming its new
