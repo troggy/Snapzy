@@ -17,7 +17,7 @@ Persistent history of screenshots, videos, and GIFs backed by GRDB SQLite, surfa
 
 ## Card Actions
 
-- Context menu (`HistoryContextMenu`): Open in Finder, Copy, Edit, Upload to Cloud (only when `CloudManager.isConfigured`; live overlay states via `HistoryCloudUploadOverlayView`), Delete — destructive last.
+- Context menu (`HistoryContextMenu`): Open in Finder, Copy, Edit, Upload permanently (only when `CloudManager.isConfigured`; live overlay states via `HistoryCloudUploadOverlayView`), Delete — destructive last.
 - Double-click opens the editor; cards expose a Restore pill.
 - Cloud upload here is manual; commit `dd4ccd5` removed only the after-capture auto-upload preference option, not this surface.
 

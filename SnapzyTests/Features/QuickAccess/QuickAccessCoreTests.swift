@@ -634,13 +634,14 @@ final class QuickAccessCoreTests: XCTestCase {
       .dismiss,
       .delete,
       .edit,
-      .uploadToCloud,
+      .uploadTemporary,
+      .uploadPermanent,
       .pinToScreen,
     ]
 
     XCTAssertEqual(
       QuickAccessActionKind.contextMenuOrder(from: configuredOrder),
-      [.copy, .saveOrOpen, .edit, .uploadToCloud, .pinToScreen, .dismiss, .delete]
+      [.copy, .saveOrOpen, .edit, .uploadTemporary, .uploadPermanent, .pinToScreen, .dismiss, .delete]
     )
   }
 
@@ -667,9 +668,27 @@ final class QuickAccessCoreTests: XCTestCase {
 
     XCTAssertEqual(
       store.actionOrder,
-      [.delete, .copy, .saveOrOpen, .dismiss, .edit, .uploadToCloud, .pinToScreen]
+      [.delete, .copy, .saveOrOpen, .dismiss, .edit, .uploadTemporary, .uploadPermanent, .pinToScreen]
     )
     XCTAssertEqual(store.orderedActions(includeDisabled: false), [.copy])
+  }
+
+  func testQuickAccessActionConfigurationStore_migratesLegacyCloudAction() {
+    let defaults = makeIsolatedDefaults()
+    defaults.set(["uploadToCloud"], forKey: PreferencesKeys.quickAccessActionOrder)
+    defaults.set(["uploadToCloud"], forKey: PreferencesKeys.quickAccessEnabledActions)
+    defaults.set(
+      [QuickAccessActionSlot.bottomTrailing.rawValue: "uploadToCloud"],
+      forKey: PreferencesKeys.quickAccessActionSlotAssignments
+    )
+
+    let store = makeActionConfigurationStore(defaults: defaults)
+
+    XCTAssertTrue(store.actionOrder.contains(.uploadTemporary))
+    XCTAssertTrue(store.actionOrder.contains(.uploadPermanent))
+    XCTAssertTrue(store.isEnabled(.uploadTemporary))
+    XCTAssertTrue(store.isEnabled(.uploadPermanent))
+    XCTAssertEqual(store.action(in: .bottomTrailing), .uploadTemporary)
   }
 
   func testQuickAccessActionConfigurationStore_preservesExplicitPinToScreenDisable() {
@@ -695,30 +714,30 @@ final class QuickAccessCoreTests: XCTestCase {
     let defaults = makeIsolatedDefaults()
     let store = makeActionConfigurationStore(defaults: defaults)
 
-    store.setEnabled(.uploadToCloud, enabled: false)
+    store.setEnabled(.uploadTemporary, enabled: false)
     store.moveAction(from: IndexSet(integer: 0), to: 3)
 
-    XCTAssertFalse(store.isEnabled(.uploadToCloud))
+    XCTAssertFalse(store.isEnabled(.uploadTemporary))
     XCTAssertEqual(
       store.actionOrder,
-      [.saveOrOpen, .dismiss, .copy, .delete, .edit, .uploadToCloud, .pinToScreen]
+      [.saveOrOpen, .dismiss, .copy, .delete, .edit, .uploadTemporary, .uploadPermanent, .pinToScreen]
     )
     XCTAssertEqual(store.slotAssignments, QuickAccessActionSlot.defaultAssignments)
 
     let reloadedStore = makeActionConfigurationStore(defaults: defaults)
-    XCTAssertFalse(reloadedStore.isEnabled(.uploadToCloud))
+    XCTAssertFalse(reloadedStore.isEnabled(.uploadTemporary))
     XCTAssertEqual(reloadedStore.actionOrder, store.actionOrder)
     XCTAssertEqual(reloadedStore.slotAssignments, QuickAccessActionSlot.defaultAssignments)
 
-    reloadedStore.assignAction(.uploadToCloud, to: .centerTop)
+    reloadedStore.assignAction(.uploadTemporary, to: .centerTop)
     reloadedStore.clearSlot(.bottomLeading)
 
-    XCTAssertEqual(reloadedStore.action(in: .centerTop), .uploadToCloud)
+    XCTAssertEqual(reloadedStore.action(in: .centerTop), .uploadTemporary)
     XCTAssertNil(reloadedStore.action(in: .bottomTrailing))
     XCTAssertNil(reloadedStore.action(in: .bottomLeading))
 
     let placementReload = makeActionConfigurationStore(defaults: defaults)
-    XCTAssertEqual(placementReload.action(in: .centerTop), .uploadToCloud)
+    XCTAssertEqual(placementReload.action(in: .centerTop), .uploadTemporary)
     XCTAssertNil(placementReload.action(in: .bottomTrailing))
     XCTAssertNil(placementReload.action(in: .bottomLeading))
 
@@ -746,8 +765,8 @@ final class QuickAccessCoreTests: XCTestCase {
     XCTAssertNil(store.action(in: .centerBottom))
     XCTAssertEqual(store.action(in: .topTrailing), .delete)
     XCTAssertNil(store.action(in: .topLeading))
-    XCTAssertEqual(store.action(in: .bottomLeading), .edit)
-    XCTAssertEqual(store.action(in: .bottomTrailing), .uploadToCloud)
+    XCTAssertEqual(store.action(in: .bottomLeading), .uploadTemporary)
+    XCTAssertEqual(store.action(in: .bottomTrailing), .uploadPermanent)
   }
 
   func testQuickAccessCountdownTimer_pauseResumePreservesRemainingTime() async throws {

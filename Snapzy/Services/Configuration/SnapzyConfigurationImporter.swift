@@ -423,6 +423,10 @@ enum SnapzyConfigurationImporter {
     collectString(&reader, "cloud", "custom_domain", mutations: &mutations) {
       defaults.set($0, forKey: PreferencesKeys.cloudCustomDomain)
     }
+    collectString(&reader, "cloud", "storage_id", mutations: &mutations) { storageID in
+      guard CloudConfiguration.isValidStorageID(storageID) else { return }
+      defaults.set(storageID, forKey: PreferencesKeys.cloudStorageID)
+    }
     collectEnumString(&reader, "cloud", "expire_time", allowed: CloudExpireTime.allCases.map(\.rawValue), mutations: &mutations) {
       defaults.set($0, forKey: PreferencesKeys.cloudExpireTime)
     }

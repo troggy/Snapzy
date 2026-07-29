@@ -2,7 +2,7 @@
 //  CloudUsageService.swift
 //  Snapzy
 //
-//  Fetches cloud bucket usage via S3-compatible API (ListObjectsV2 + lifecycle)
+//  Fetches this installation's managed S3-prefix usage via ListObjectsV2.
 //  Works with both AWS S3 and Cloudflare R2 using existing credentials.
 //
 
@@ -28,26 +28,32 @@ private actor CloudUsageWorker {
   ) async throws -> CloudUsageInfo {
     let context = makeRequestContext(config: config)
 
-    let (totalBytes, objectCount) = try await listAllObjects(
+    guard config.isStorageIDValid else {
+      throw CloudError.notConfigured
+    }
+
+    let temporaryUsage = try await listAllObjects(
       config: config,
       endpoint: context.endpoint,
       region: context.region,
       accessKey: accessKey,
-      secretKey: secretKey
+      secretKey: secretKey,
+      prefix: "temporary/\(config.storageID)/"
     )
-    let lifecycleDays = try? await getLifecycleRuleDays(
+    let permanentUsage = try await listAllObjects(
       config: config,
       endpoint: context.endpoint,
       region: context.region,
       accessKey: accessKey,
-      secretKey: secretKey
+      secretKey: secretKey,
+      prefix: "permanent/\(config.storageID)/"
     )
 
     return CloudUsageInfo(
       providerType: config.providerType,
-      totalStorageBytes: totalBytes,
-      objectCount: objectCount,
-      lifecycleRuleDays: lifecycleDays,
+      totalStorageBytes: temporaryUsage.0 + permanentUsage.0,
+      objectCount: temporaryUsage.1 + permanentUsage.1,
+      lifecycleRuleDays: nil,
       fetchedAt: Date()
     )
   }
@@ -57,21 +63,25 @@ private actor CloudUsageWorker {
     endpoint: String,
     region: String,
     accessKey: String,
-    secretKey: String
+    secretKey: String,
+    prefix: String
   ) async throws -> (Int64, Int) {
     var totalBytes: Int64 = 0
     var objectCount = 0
     var continuationToken: String?
 
     repeat {
-      var queryString = "list-type=2&prefix=snapzy/&max-keys=1000"
+      var components = URLComponents(url: URL(string: endpoint)!.appendingPathComponent(config.bucket), resolvingAgainstBaseURL: false)!
+      var queryItems = [
+        URLQueryItem(name: "list-type", value: "2"),
+        URLQueryItem(name: "prefix", value: prefix),
+        URLQueryItem(name: "max-keys", value: "1000"),
+      ]
       if let token = continuationToken {
-        let encodedToken =
-          token.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? token
-        queryString += "&continuation-token=\(encodedToken)"
+        queryItems.append(URLQueryItem(name: "continuation-token", value: token))
       }
-
-      let url = URL(string: "\(endpoint)/\(config.bucket)?\(queryString)")!
+      components.queryItems = queryItems
+      let url = components.url!
       var request = URLRequest(url: url)
       request.httpMethod = "GET"
 
@@ -124,34 +134,6 @@ private actor CloudUsageWorker {
     } while continuationToken != nil
 
     return (totalBytes, objectCount)
-  }
-
-  private func getLifecycleRuleDays(
-    config: CloudConfiguration,
-    endpoint: String,
-    region: String,
-    accessKey: String,
-    secretKey: String
-  ) async throws -> Int? {
-    let url = URL(string: "\(endpoint)/\(config.bucket)?lifecycle")!
-    var request = URLRequest(url: url)
-    request.httpMethod = "GET"
-
-    let signedRequest = try AWSV4Signer.sign(
-      request: request,
-      accessKey: accessKey,
-      secretKey: secretKey,
-      region: region,
-      payloadHash: AWSV4Signer.sha256Hex("")
-    )
-
-    let (data, response) = try await URLSession.shared.data(for: signedRequest)
-
-    guard let httpResponse = response as? HTTPURLResponse else { return nil }
-    if httpResponse.statusCode == 404 { return nil }
-    guard (200...299).contains(httpResponse.statusCode) else { return nil }
-
-    return LifecycleRuleParser.parseSnapzyExpireDays(from: data)
   }
 
   private struct RequestContext {
@@ -274,7 +256,7 @@ final class CloudUsageService: ObservableObject {
 
   // MARK: - Fetch
 
-  /// Fetch bucket usage by listing objects and checking lifecycle config.
+  /// Fetch managed object usage from the temporary and permanent prefixes.
   func fetchUsage(forceRefresh: Bool = false) async {
     guard let config = CloudManager.shared.loadConfiguration() else {
       usageInfo = nil
@@ -369,7 +351,6 @@ final class CloudUsageService: ObservableObject {
               "provider": info.providerType.rawValue,
               "storageBytes": "\(info.totalStorageBytes)",
               "objectCount": "\(info.objectCount)",
-              "lifecycleDays": info.lifecycleRuleDays.map { "\($0)" } ?? "none",
             ]
           )
         }
@@ -550,7 +531,7 @@ final class CloudUsageService: ObservableObject {
     }
     let endpoint = (config.endpoint ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
       .lowercased()
-    return "\(config.providerType.rawValue)|\(bucket)|\(region)|\(endpoint)"
+    return "\(config.providerType.rawValue)|\(bucket)|\(region)|\(endpoint)|\(config.storageID)"
   }
 
   private static func userFacingErrorMessage(from error: Error) -> String {

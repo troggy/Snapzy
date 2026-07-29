@@ -50,6 +50,16 @@ By default it writes `AppIcon.appiconset` next to the input `.icon` package. To 
 
 ## Command Line Build
 
+### GitHub Actions Build
+
+Run **Manual macOS Build** from the repository's Actions tab to build a selected
+Git ref on a hosted macOS runner. It uploads an unsigned
+`Snapzy-unsigned-macos.zip` artifact for 14 days and does not use signing or
+release credentials. Enable the optional test input when a test run is wanted.
+
+The artifact is suitable for internal testing. Use the signed release workflow
+for distribution outside the team.
+
 ### Development Build
 
 ```bash

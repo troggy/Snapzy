@@ -172,19 +172,24 @@ struct QuickAccessCardView: View {
     isTempFile ? L10n.Common.deleteAction : L10n.Common.moveToTrash
   }
 
-  private var alreadyUploadedToCloud: Bool {
-    item.cloudURL != nil && !item.isCloudStale
+  private func alreadyUploadedToCloud(destination: CloudUploadDestination) -> Bool {
+    item.cloudKey?.hasPrefix("\(destination.rawValue)/") == true && !item.isCloudStale
   }
 
-  private var cloudActionTitle: String {
-    if alreadyUploadedToCloud {
+  private func cloudActionTitle(for destination: CloudUploadDestination) -> String {
+    if alreadyUploadedToCloud(destination: destination) {
       return L10n.AnnotateUI.uploadedToCloud
     }
-    return item.isCloudStale ? L10n.AnnotateUI.reuploadToCloud : L10n.AnnotateUI.uploadToCloud
+    switch destination {
+    case .temporary:
+      return item.isCloudStale ? "Reupload Temporarily" : "Upload Temporarily"
+    case .permanent:
+      return item.isCloudStale ? "Reupload Permanently" : "Upload Permanently"
+    }
   }
 
-  private var cloudActionIcon: String {
-    alreadyUploadedToCloud ? "checkmark.icloud" : "icloud.and.arrow.up"
+  private func cloudActionIcon(for destination: CloudUploadDestination) -> String {
+    alreadyUploadedToCloud(destination: destination) ? "checkmark.icloud" : "icloud.and.arrow.up"
   }
 
   private var canPerformCardActions: Bool {
@@ -332,8 +337,10 @@ struct QuickAccessCardView: View {
       return deleteActionTitle
     case .edit:
       return editActionTitle
-    case .uploadToCloud:
-      return cloudActionTitle
+    case .uploadTemporary:
+      return cloudActionTitle(for: .temporary)
+    case .uploadPermanent:
+      return cloudActionTitle(for: .permanent)
     case .pinToScreen:
       return item.isPinned ? L10n.PreferencesQuickAccess.unpinAction : L10n.PreferencesQuickAccess.pinToScreenAction
     }
@@ -343,8 +350,10 @@ struct QuickAccessCardView: View {
     switch action {
     case .saveOrOpen:
       return isTempFile ? "square.and.arrow.down" : "folder"
-    case .uploadToCloud:
-      return cloudActionIcon
+    case .uploadTemporary:
+      return cloudActionIcon(for: .temporary)
+    case .uploadPermanent:
+      return cloudActionIcon(for: .permanent)
     case .pinToScreen:
       return item.isPinned ? "pin.fill" : "pin"
     default:
@@ -363,7 +372,7 @@ struct QuickAccessCardView: View {
       return true
     case .saveOrOpen:
       return true
-    case .uploadToCloud:
+    case .uploadTemporary, .uploadPermanent:
       return shouldShowCloudButton
     case .delete:
       return true
@@ -374,8 +383,10 @@ struct QuickAccessCardView: View {
     switch action {
     case .pinToScreen:
       return !item.isVideo
-    case .uploadToCloud:
-      return shouldShowCloudButton && !alreadyUploadedToCloud && !isCloudUploading
+    case .uploadTemporary:
+      return shouldShowCloudButton && !alreadyUploadedToCloud(destination: .temporary) && !isCloudUploading
+    case .uploadPermanent:
+      return shouldShowCloudButton && !alreadyUploadedToCloud(destination: .permanent) && !isCloudUploading
     case .copy, .saveOrOpen, .dismiss, .delete, .edit:
       return true
     }
@@ -395,8 +406,10 @@ struct QuickAccessCardView: View {
       deleteItem()
     case .edit:
       handleDoubleClick()
-    case .uploadToCloud:
-      uploadToCloud()
+    case .uploadTemporary:
+      uploadTemporary()
+    case .uploadPermanent:
+      uploadPermanent()
     case .pinToScreen:
       guard !item.isVideo else { return }
       manager.togglePin(id: item.id)
@@ -634,16 +647,25 @@ struct QuickAccessCardView: View {
   }
 
   /// Upload the current item to cloud storage
-  private func uploadToCloud() {
-    guard !isCloudUploading, !alreadyUploadedToCloud else {
+  private func uploadTemporary() {
+    upload(destination: .temporary)
+  }
+
+  private func uploadPermanent() {
+    upload(destination: .permanent)
+  }
+
+  private func upload(destination: CloudUploadDestination) {
+    guard !isCloudUploading, !alreadyUploadedToCloud(destination: destination) else {
       DiagnosticLogger.shared.log(
         .debug,
         .cloud,
         "Quick access cloud upload skipped",
         context: [
           "fileName": item.url.lastPathComponent,
+          "destination": destination.rawValue,
           "isUploading": isCloudUploading ? "true" : "false",
-          "alreadyUploaded": alreadyUploadedToCloud ? "true" : "false",
+          "alreadyUploaded": alreadyUploadedToCloud(destination: destination) ? "true" : "false",
         ]
       )
       return
@@ -659,8 +681,9 @@ struct QuickAccessCardView: View {
       .cloud,
       "Quick access cloud upload started",
       context: [
-        "fileName": item.url.lastPathComponent,
-        "hasOldCloudKey": oldCloudKey == nil ? "false" : "true",
+          "fileName": item.url.lastPathComponent,
+          "destination": destination.rawValue,
+          "hasOldCloudKey": oldCloudKey == nil ? "false" : "true",
       ]
     )
 
@@ -679,7 +702,7 @@ struct QuickAccessCardView: View {
         defer { fileAccess.stop() }
 
         // Always upload with a fresh key (new URL avoids CDN cache)
-        let result = try await cloudManager.upload(fileURL: item.url)
+        let result = try await cloudManager.upload(fileURL: item.url, destination: destination)
 
         // Delete old cloud file in background (no garbage)
         if let oldKey = oldCloudKey {
@@ -718,7 +741,7 @@ struct QuickAccessCardView: View {
           .info,
           .cloud,
           "Quick access cloud upload completed",
-          context: ["fileName": item.url.lastPathComponent]
+          context: ["fileName": item.url.lastPathComponent, "destination": destination.rawValue]
         )
       } catch {
         isCloudUploading = false
@@ -727,7 +750,7 @@ struct QuickAccessCardView: View {
           .cloud,
           error,
           "Quick access cloud upload failed",
-          context: ["fileName": item.url.lastPathComponent]
+          context: ["fileName": item.url.lastPathComponent, "destination": destination.rawValue]
         )
       }
     }

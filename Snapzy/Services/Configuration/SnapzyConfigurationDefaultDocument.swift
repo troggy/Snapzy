@@ -158,6 +158,7 @@ enum SnapzyConfigurationDefaultDocument {
     writer.value("region", "us-east-1")
     writer.value("endpoint", "")
     writer.value("custom_domain", "")
+    writer.value("storage_id", "")
     writer.value("expire_time", CloudExpireTime.day7.rawValue)
     writer.value("uploads_window_position", CloudUploadFloatingPosition.defaultPosition.rawValue)
   }

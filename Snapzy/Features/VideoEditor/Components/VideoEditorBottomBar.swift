@@ -23,7 +23,10 @@ struct VideoEditorBottomBar: View {
   @State private var showOverwriteConfirmation = false
 
   private var shouldShowCloudButton: Bool {
-    cloudManager.isConfigured && QuickAccessActionConfigurationStore.shared.isEnabled(.uploadToCloud)
+    cloudManager.isConfigured && (
+      QuickAccessActionConfigurationStore.shared.isEnabled(.uploadTemporary)
+        || QuickAccessActionConfigurationStore.shared.isEnabled(.uploadPermanent)
+    )
   }
 
   private var alreadyUploadedToCloud: Bool {
@@ -126,7 +129,11 @@ struct VideoEditorBottomBar: View {
 
         // Use old key if overwriting to replace the object, otherwise upload with fresh key
         let uploadKey = overwrite ? state.cloudKey : nil
-        let result = try await cloudManager.upload(fileURL: sourceURL, existingKey: uploadKey)
+        let result = try await cloudManager.upload(
+          fileURL: sourceURL,
+          destination: .permanent,
+          existingKey: uploadKey
+        )
 
         // Delete old cloud file if we generated a fresh one and had a previous one
         if let oldKey = oldCloudKey {

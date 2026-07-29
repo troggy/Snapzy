@@ -92,7 +92,7 @@ Segmented into three panes (`CaptureSettingsPane`): General / Screenshot / Recor
 
 ### Cloud (`PreferencesCloudSettingsView.swift`)
 
-Provider configuration, credentials, expiration, usage stats, and the Cloud Uploads window. Summary only here — full reference in [CLOUD.md](CLOUD.md).
+Provider configuration, credentials, provisioned storage ID, usage stats, and the Cloud Uploads window. Summary only here — full reference in [CLOUD.md](CLOUD.md).
 
 ### Advanced (`PreferencesAdvancedSettingsView.swift`)
 

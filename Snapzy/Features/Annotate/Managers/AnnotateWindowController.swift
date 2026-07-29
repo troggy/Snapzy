@@ -1246,7 +1246,7 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
           context: ["fileName": sourceURL.lastPathComponent, "mode": "save"]
         )
 
-        let result = try await CloudManager.shared.upload(fileURL: sourceURL)
+        let result = try await CloudManager.shared.upload(fileURL: sourceURL, destination: .permanent)
 
         // Delete old cloud file in background
         if let oldKey = oldCloudKey {
@@ -1340,7 +1340,7 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
           context: ["fileName": sourceURL.lastPathComponent, "mode": "copy"]
         )
 
-        let result = try await CloudManager.shared.upload(fileURL: sourceURL)
+        let result = try await CloudManager.shared.upload(fileURL: sourceURL, destination: .permanent)
 
         // Delete old cloud file
         if let oldKey = oldCloudKey {

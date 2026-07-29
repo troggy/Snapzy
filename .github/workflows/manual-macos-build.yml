@@ -1,0 +1,95 @@
+name: Manual macOS Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build
+        required: true
+        default: master
+        type: string
+      run_tests:
+        description: Run the macOS test suite before building
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: manual-macos-build-${{ inputs.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build unsigned Snapzy app
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "26.2"
+
+      - name: Run tests
+        if: inputs.run_tests
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          xcodebuild \
+            -project Snapzy.xcodeproj \
+            -scheme Snapzy \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData \
+            -resultBundlePath build/manual-test.xcresult \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            test | tee build/manual-test.log
+
+      - name: Build unsigned release app
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          xcodebuild \
+            -project Snapzy.xcodeproj \
+            -scheme Snapzy \
+            -configuration Release \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            build | tee build/manual-build.log
+
+          APP_PATH="build/DerivedData/Build/Products/Release/Snapzy.app"
+          test -d "$APP_PATH"
+          test -x "$APP_PATH/Contents/MacOS/Snapzy"
+
+          ditto -c -k --keepParent "$APP_PATH" build/Snapzy-unsigned-macos.zip
+
+      - name: Upload unsigned app
+        uses: actions/upload-artifact@v7
+        with:
+          name: Snapzy-${{ github.sha }}-unsigned-macos
+          path: build/Snapzy-unsigned-macos.zip
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: Snapzy-${{ github.sha }}-manual-build-diagnostics
+          path: |
+            build/manual-build.log
+            build/manual-test.log
+            build/manual-test.xcresult
+          retention-days: 14
+          if-no-files-found: ignore

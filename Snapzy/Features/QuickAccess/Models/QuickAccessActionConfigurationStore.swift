@@ -131,7 +131,7 @@ final class QuickAccessActionConfigurationStore: ObservableObject {
     var ordered: [QuickAccessActionKind] = []
 
     for rawID in rawIDs ?? [] {
-      guard let action = QuickAccessActionKind(rawValue: rawID), !seen.contains(action) else { continue }
+      guard let action = action(for: rawID), !seen.contains(action) else { continue }
       ordered.append(action)
       seen.insert(action)
     }
@@ -148,7 +148,13 @@ final class QuickAccessActionConfigurationStore: ObservableObject {
       return QuickAccessActionKind.defaultEnabledActions
     }
 
-    return Set(rawIDs.compactMap(QuickAccessActionKind.init(rawValue:)))
+    var actions = Set(rawIDs.compactMap(action(for:)))
+    // A legacy cloud action represented the only upload behavior. Preserve it as
+    // temporary while exposing the newly available permanent upload action.
+    if rawIDs.contains("uploadToCloud") {
+      actions.insert(.uploadPermanent)
+    }
+    return actions
   }
 
   private static func normalizedSlotAssignments(
@@ -158,15 +164,19 @@ final class QuickAccessActionConfigurationStore: ObservableObject {
       return QuickAccessActionSlot.defaultAssignments
     }
 
+    let hasLegacyCloudAssignment = rawAssignments.values.contains("uploadToCloud")
     var seenActions = Set<QuickAccessActionKind>()
     var assignments: [QuickAccessActionSlot: QuickAccessActionKind] = [:]
 
     for slot in QuickAccessActionSlot.allCases {
       let action: QuickAccessActionKind?
       if let rawAction = rawAssignments[slot.rawValue] {
-        action = rawAction.isEmpty ? nil : QuickAccessActionKind(rawValue: rawAction)
+        action = rawAction.isEmpty ? nil : action(for: rawAction)
       } else {
-        action = QuickAccessActionSlot.defaultAssignments[slot]
+        let defaultAction = QuickAccessActionSlot.defaultAssignments[slot]
+        // Preserve a legacy action's assigned slot instead of claiming its new
+        // temporary counterpart in an earlier defaulted slot.
+        action = hasLegacyCloudAssignment && defaultAction == .uploadTemporary ? nil : defaultAction
       }
 
       guard let action,
@@ -189,5 +199,9 @@ final class QuickAccessActionConfigurationStore: ObservableObject {
       rawAssignments[slot.rawValue] = assignments[slot]?.rawValue ?? ""
     }
     return rawAssignments
+  }
+
+  private static func action(for rawID: String) -> QuickAccessActionKind? {
+    rawID == "uploadToCloud" ? .uploadTemporary : QuickAccessActionKind(rawValue: rawID)
   }
 }

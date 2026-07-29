@@ -20,6 +20,7 @@ final class S3CloudProvider: CloudProvider {
   private let region: String
   private let endpoint: URL
   private let customDomain: String?
+  private let storageID: String
   private let session: URLSessionProtocol
   private let multipartUploader: S3MultipartUploader
 
@@ -30,6 +31,7 @@ final class S3CloudProvider: CloudProvider {
     self.bucket = config.bucket
     self.region = config.region.isEmpty ? "us-east-1" : config.region
     self.customDomain = config.customDomain
+    self.storageID = config.storageID
 
     if let endpointStr = config.endpoint, !endpointStr.isEmpty {
       self.endpoint = URL(string: endpointStr)!
@@ -53,6 +55,7 @@ final class S3CloudProvider: CloudProvider {
   func upload(
     fileURL: URL,
     contentType: String,
+    destination: CloudUploadDestination,
     expireTime: CloudExpireTime,
     existingKey: String? = nil,
     progress: @escaping @Sendable (Double) -> Void
@@ -60,16 +63,20 @@ final class S3CloudProvider: CloudProvider {
     guard FileManager.default.fileExists(atPath: fileURL.path) else {
       throw CloudError.fileNotFound(fileURL)
     }
+    guard isStorageIDValid else {
+      throw CloudError.notConfigured
+    }
 
     let fileAttributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path)
     let fileSize = fileAttributes?[.size] as? Int64 ?? 0
-    let key = existingKey ?? generateObjectKey(fileName: fileURL.lastPathComponent)
+    let key = existingKey ?? generateObjectKey(fileName: fileURL.lastPathComponent, destination: destination)
 
     // Route to multipart uploader if file size exceeds threshold
     if fileSize > S3MultipartUploader.multipartThreshold {
       return try await multipartUploader.upload(
         fileURL: fileURL,
         key: key,
+        destination: destination,
         contentType: contentType,
         expireTime: expireTime,
         progress: progress
@@ -144,10 +151,21 @@ final class S3CloudProvider: CloudProvider {
   // MARK: - Validate
 
   func validate() async throws {
-    // HEAD bucket to verify credentials
-    let url = URL(string: "\(endpoint.absoluteString)/\(bucket)")!
+    guard isStorageIDValid else {
+      throw CloudError.notConfigured
+    }
+
+    // List only this installation's temporary namespace; managed credentials need
+    // not have bucket-level HEAD permission.
+    var components = URLComponents(url: endpoint.appendingPathComponent(bucket), resolvingAgainstBaseURL: false)!
+    components.queryItems = [
+      URLQueryItem(name: "list-type", value: "2"),
+      URLQueryItem(name: "prefix", value: "temporary/\(storageID)/"),
+      URLQueryItem(name: "max-keys", value: "1"),
+    ]
+    let url = components.url!
     var request = URLRequest(url: url)
-    request.httpMethod = "HEAD"
+    request.httpMethod = "GET"
 
     let signedRequest = try AWSV4Signer.sign(
       request: request,
@@ -167,7 +185,7 @@ final class S3CloudProvider: CloudProvider {
       throw CloudError.invalidCredentials
     }
 
-    guard (200...404).contains(httpResponse.statusCode) else {
+    guard (200...299).contains(httpResponse.statusCode) else {
       throw CloudError.uploadFailed(
         statusCode: httpResponse.statusCode,
         message: L10n.CloudOperation.bucketValidationFailed
@@ -378,14 +396,14 @@ final class S3CloudProvider: CloudProvider {
     URL(string: "\(endpoint.absoluteString)/\(bucket)/\(key)")!
   }
 
-  private func generateObjectKey(fileName: String) -> String {
-    let timestamp = Int(Date().timeIntervalSince1970)
-    let uuid = UUID().uuidString.prefix(8).lowercased()
-    let ext = (fileName as NSString).pathExtension
-    let name = (fileName as NSString).deletingPathExtension
-      .replacingOccurrences(of: " ", with: "-")
-      .lowercased()
-    return "snapzy/\(timestamp)-\(uuid)-\(name).\(ext)"
+  private var isStorageIDValid: Bool {
+    CloudConfiguration.isValidStorageID(storageID)
+  }
+
+  private func generateObjectKey(fileName: String, destination: CloudUploadDestination) -> String {
+    let fileExtension = (fileName as NSString).pathExtension.lowercased()
+    let ext = fileExtension.isEmpty ? "bin" : fileExtension
+    return "\(destination.rawValue)/\(storageID)/\(UUID().uuidString.lowercased()).\(ext)"
   }
 
   // MARK: - Upload with Progress

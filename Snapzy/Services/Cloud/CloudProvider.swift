@@ -34,6 +34,12 @@ struct CloudUploadResult {
   let uploadedAt: Date
 }
 
+/// Managed S3 namespace for an uploaded object.
+enum CloudUploadDestination: String, Codable, CaseIterable, Sendable {
+  case temporary
+  case permanent
+}
+
 // MARK: - Cloud Provider Protocol
 
 /// Strategy interface for cloud storage operations.
@@ -45,13 +51,15 @@ protocol CloudProvider {
   /// - Parameters:
   ///   - fileURL: Local file URL to upload
   ///   - contentType: MIME type of the file (e.g. "image/png")
-  ///   - expireTime: Expiration time for the uploaded file
+  ///   - destination: Managed namespace for the uploaded file
+  ///   - expireTime: Expiration time metadata for the uploaded file
   ///   - existingKey: If provided, overwrites the existing object with this key
   ///   - progress: Progress callback (0.0 to 1.0)
   /// - Returns: Upload result with public URL and metadata
   func upload(
     fileURL: URL,
     contentType: String,
+    destination: CloudUploadDestination,
     expireTime: CloudExpireTime,
     existingKey: String?,
     progress: @escaping @Sendable (Double) -> Void

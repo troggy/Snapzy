@@ -211,6 +211,14 @@ struct CloudSettingsView: View {
               EmptyView()
             }
 
+            SettingRow(
+              icon: "number",
+              title: "Storage ID",
+              description: config.storageID
+            ) {
+              EmptyView()
+            }
+
             if !config.region.isEmpty && config.providerType == .awsS3 {
               SettingRow(
                 icon: "globe",
@@ -432,11 +440,6 @@ struct CloudSettingsView: View {
                 value: "—"
               )
               CloudStatCard(
-                icon: "clock.arrow.circlepath",
-                label: L10n.CloudUsage.lifecycle,
-                value: lifecycleShortLabel(nil)
-              )
-              CloudStatCard(
                 icon: "dollarsign.circle",
                 label: L10n.CloudUsage.estimatedCostPerMonth,
                 value: "—"
@@ -474,11 +477,6 @@ struct CloudSettingsView: View {
             icon: "doc.on.doc",
             label: L10n.CloudUsage.objects,
             value: info.map { "\($0.objectCount)" } ?? "—"
-          )
-          CloudStatCard(
-            icon: "clock.arrow.circlepath",
-            label: L10n.CloudUsage.lifecycle,
-            value: lifecycleShortLabel(info?.lifecycleRuleDays)
           )
           CloudStatCard(
             icon: "dollarsign.circle",
@@ -539,10 +537,6 @@ struct CloudSettingsView: View {
     }
   }
 
-  private func lifecycleShortLabel(_ days: Int?) -> String {
-    guard let days = days else { return L10n.CloudUsage.none }
-    return L10n.CloudUsage.daysExpire(days)
-  }
 }
 
 // MARK: - Stat Card
@@ -789,6 +783,7 @@ private struct CloudCredentialFormView: View {
   @State private var region = "us-east-1"
   @State private var endpoint = ""
   @State private var customDomain = ""
+  @State private var storageID = ""
   @State private var expireTime: CloudExpireTime = .day7
   @State private var showSecretKey = false
 
@@ -810,7 +805,6 @@ private struct CloudCredentialFormView: View {
   @State private var validationSuccess = false
   @State private var showSkipPasswordWarning = false
   @State private var hasExistingPassword = false
-  @State private var showLimitedPermissionWarning = false
 
   var body: some View {
     Group {
@@ -993,6 +987,17 @@ private struct CloudCredentialFormView: View {
               .frame(width: 240)
           }
 
+          SettingRow(
+            icon: "number",
+            title: "Storage ID",
+            description: "32 lowercase hexadecimal characters",
+            tooltip: nil
+          ) {
+            TextField("", text: $storageID)
+              .textFieldStyle(.roundedBorder)
+              .frame(width: 240)
+          }
+
           if providerType == .awsS3 {
             SettingRow(
               icon: "globe",
@@ -1042,37 +1047,13 @@ private struct CloudCredentialFormView: View {
           }
         }
 
-        Section(L10n.CloudSettings.fileExpirationSection) {
-          Picker(L10n.CloudSettings.expireTime, selection: $expireTime) {
-            ForEach(CloudExpireTime.allCases, id: \.self) { time in
-              Text(time.displayName).tag(time)
+        if providerType == .cloudflareR2 {
+          Section(L10n.CloudSettings.fileExpirationSection) {
+            Picker(L10n.CloudSettings.expireTime, selection: $expireTime) {
+              ForEach(CloudExpireTime.allCases, id: \.self) { time in
+                Text(time.displayName).tag(time)
+              }
             }
-          }
-
-          if expireTime.isPermanent {
-            HStack(alignment: .top, spacing: 6) {
-              Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(.orange)
-                .font(.system(size: 12))
-                .padding(.top, 1)
-              Text(L10n.CloudSettings.noLifecycleRuleWarning)
-              .font(.system(size: 11))
-              .foregroundColor(.orange)
-              .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
-          } else {
-            HStack(alignment: .top, spacing: 6) {
-              Image(systemName: "info.circle")
-                .foregroundColor(.secondary)
-                .font(.system(size: 12))
-                .padding(.top, 1)
-              Text(L10n.CloudSettings.lifecycleRuleInfo)
-              .font(.system(size: 11))
-              .foregroundColor(.secondary)
-              .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
           }
         }
       }
@@ -1142,20 +1123,6 @@ private struct CloudCredentialFormView: View {
           }
         }
 
-        if showLimitedPermissionWarning {
-          HStack(alignment: .top, spacing: 6) {
-            Image(systemName: "exclamationmark.triangle.fill")
-              .foregroundColor(.orange)
-              .font(.system(size: 12))
-              .padding(.top, 1)
-            Text(L10n.CloudSettings.limitedPermissionsWarning)
-              .font(.system(size: 11))
-              .foregroundColor(.orange)
-              .fixedSize(horizontal: false, vertical: true)
-          }
-          .padding(.vertical, 4)
-        }
-
         HStack(spacing: 12) {
           Button(action: handleSave) {
             if isValidating {
@@ -1207,6 +1174,7 @@ private struct CloudCredentialFormView: View {
     return !accessKey.trimmingCharacters(in: .whitespaces).isEmpty
       && !secretKey.trimmingCharacters(in: .whitespaces).isEmpty
       && !bucket.trimmingCharacters(in: .whitespaces).isEmpty
+      && CloudConfiguration.isValidStorageID(storageID)
       && (providerType == .awsS3
         ? !region.trimmingCharacters(in: .whitespaces).isEmpty
         : !endpoint.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -1267,7 +1235,6 @@ private struct CloudCredentialFormView: View {
   private func saveAndTest() {
     validationError = nil
     validationSuccess = false
-    showLimitedPermissionWarning = false
     isValidating = true
 
     let isGoogle = providerType == .googleDrive
@@ -1278,6 +1245,7 @@ private struct CloudCredentialFormView: View {
       region: isGoogle ? "" : region.trimmingCharacters(in: .whitespaces),
       endpoint: isGoogle ? nil : (endpoint.trimmingCharacters(in: .whitespaces).isEmpty ? nil : endpoint.trimmingCharacters(in: .whitespaces)),
       customDomain: isGoogle ? nil : (customDomain.trimmingCharacters(in: .whitespaces).isEmpty ? nil : customDomain.trimmingCharacters(in: .whitespaces)),
+      storageID: isGoogle ? "" : storageID.trimmingCharacters(in: .whitespacesAndNewlines),
       expireTime: isGoogle ? .permanent : expireTime
     )
 
@@ -1293,24 +1261,6 @@ private struct CloudCredentialFormView: View {
           secretKey: trimmedSecretKey,
           googleRefreshToken: refreshToken
         )
-
-        if !isGoogle {
-          do {
-            try await cloudManager.applyLifecycleRule(
-              config: config,
-              accessKey: trimmedAccessKey,
-              secretKey: trimmedSecretKey
-            )
-          } catch {
-            showLimitedPermissionWarning = true
-            DiagnosticLogger.shared.log(
-              .warning,
-              .cloud,
-              "Cloud lifecycle rule update failed during setup; continuing without it",
-              context: ["error": error.localizedDescription]
-            )
-          }
-        }
 
         try cloudManager.saveConfiguration(
           config,
@@ -1354,6 +1304,7 @@ private struct CloudCredentialFormView: View {
     region = config.region
     endpoint = config.endpoint ?? ""
     customDomain = config.customDomain ?? ""
+    storageID = config.storageID
     expireTime = config.expireTime
     accessKey = cloudManager.loadAccessKey()
     secretKey = cloudManager.loadSecretKey()
@@ -1387,6 +1338,7 @@ private struct CloudCredentialFormView: View {
     region = payload.configuration.region
     endpoint = payload.configuration.endpoint ?? ""
     customDomain = payload.configuration.customDomain ?? ""
+    storageID = payload.configuration.storageID
     expireTime = payload.configuration.expireTime
     accessKey = payload.accessKey
     secretKey = payload.secretKey

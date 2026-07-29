@@ -99,7 +99,10 @@ struct AnnotateBottomBarView: View {
     }
     .onReceive(NotificationCenter.default.publisher(for: .annotateCloudUpload)) { _ in
       // ⌘U shortcut: trigger cloud upload (with overwrite confirmation if needed)
-      let showCloudButton = cloudManager.isConfigured && QuickAccessActionConfigurationStore.shared.isEnabled(.uploadToCloud)
+      let showCloudButton = cloudManager.isConfigured && (
+        QuickAccessActionConfigurationStore.shared.isEnabled(.uploadTemporary)
+          || QuickAccessActionConfigurationStore.shared.isEnabled(.uploadPermanent)
+      )
       let needsReUpload = state.requiresRenderedOutputForSharing || state.isCloudStale
       let alreadyUploaded = state.cloudURL != nil && !needsReUpload
       guard showCloudButton, !isCloudUploading, !alreadyUploaded else { return }
@@ -355,7 +358,10 @@ struct AnnotateBottomBarView: View {
   }
 
   private var annotateActionButtons: some View {
-    let showCloudButton = cloudManager.isConfigured && QuickAccessActionConfigurationStore.shared.isEnabled(.uploadToCloud)
+    let showCloudButton = cloudManager.isConfigured && (
+      QuickAccessActionConfigurationStore.shared.isEnabled(.uploadTemporary)
+        || QuickAccessActionConfigurationStore.shared.isEnabled(.uploadPermanent)
+    )
     let cloudUploadShortcut = annotateShortcutManager.isActionShortcutEnabled(for: .cloudUpload)
       ? annotateShortcutManager.cloudUploadShortcut?.displayString : nil
     let togglePinShortcut = annotateShortcutManager.isActionShortcutEnabled(for: .togglePin)
@@ -585,7 +591,7 @@ struct AnnotateBottomBarView: View {
         defer { fileAccess.stop() }
 
         // Always upload with a fresh key (new URL avoids CDN cache issues)
-        let result = try await cloudManager.upload(fileURL: uploadURL)
+        let result = try await cloudManager.upload(fileURL: uploadURL, destination: .permanent)
 
         // Delete the old cloud file in background (no garbage)
         if let oldKey = oldCloudKey {

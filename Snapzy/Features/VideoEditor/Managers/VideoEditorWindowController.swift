@@ -755,7 +755,10 @@ final class VideoEditorWindowController: NSWindowController, NSWindowDelegate {
 
   private func offerPostExportUpload(for fileURL: URL, completion: @escaping () -> Void) {
     guard CloudManager.shared.isConfigured,
-          QuickAccessActionConfigurationStore.shared.isEnabled(.uploadToCloud),
+          (
+            QuickAccessActionConfigurationStore.shared.isEnabled(.uploadTemporary)
+              || QuickAccessActionConfigurationStore.shared.isEnabled(.uploadPermanent)
+          ),
           let window = self.window,
           let state = state
     else {
@@ -799,7 +802,7 @@ final class VideoEditorWindowController: NSWindowController, NSWindowDelegate {
         let fileAccess = SandboxFileAccessManager.shared.beginAccessingURL(fileURL)
         defer { fileAccess.stop() }
 
-        let result = try await CloudManager.shared.upload(fileURL: fileURL)
+        let result = try await CloudManager.shared.upload(fileURL: fileURL, destination: .permanent)
 
         // Store cloud link on pasteboard
         let pasteboard = NSPasteboard.general

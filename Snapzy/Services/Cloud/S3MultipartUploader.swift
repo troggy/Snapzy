@@ -47,6 +47,7 @@ final class S3MultipartUploader {
   func upload(
     fileURL: URL,
     key: String,
+    destination: CloudUploadDestination,
     contentType: String,
     expireTime: CloudExpireTime,
     progress: @escaping @Sendable (Double) -> Void
@@ -61,7 +62,7 @@ final class S3MultipartUploader {
       throw CloudError.uploadFailed(statusCode: 400, message: "File is empty")
     }
 
-    logger.info("Initiating S3 multipart upload for \(key) (\(fileSize) bytes)")
+    logger.info("Initiating \(destination.rawValue) S3 multipart upload for \(key) (\(fileSize) bytes)")
 
     // 1. Initiate Multipart Upload
     let uploadId = try await initiateMultipartUpload(key: key, contentType: contentType, expireTime: expireTime)

@@ -180,6 +180,7 @@ enum SnapzyConfigurationExporter {
       writer.value("region", defaults.string(forKey: PreferencesKeys.cloudRegion) ?? "us-east-1")
       writer.value("endpoint", defaults.string(forKey: PreferencesKeys.cloudEndpoint) ?? "")
       writer.value("custom_domain", defaults.string(forKey: PreferencesKeys.cloudCustomDomain) ?? "")
+      writer.value("storage_id", defaults.string(forKey: PreferencesKeys.cloudStorageID) ?? "")
       writer.value("expire_time", defaults.string(forKey: PreferencesKeys.cloudExpireTime) ?? CloudExpireTime.day7.rawValue)
     }
     writer.value("uploads_window_position", CloudUploadFloatingPosition.stored(userDefaults: defaults).rawValue)

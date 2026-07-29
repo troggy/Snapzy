@@ -44,8 +44,8 @@ enum QuickAccessActionSlot: String, CaseIterable, Codable, Hashable, Identifiabl
     .centerBottom: .saveOrOpen,
     .topTrailing: .dismiss,
     .topLeading: .delete,
-    .bottomLeading: .edit,
-    .bottomTrailing: .uploadToCloud,
+    .bottomLeading: .uploadTemporary,
+    .bottomTrailing: .uploadPermanent,
   ]
 
   var isCenterSlot: Bool {
@@ -76,7 +76,8 @@ enum QuickAccessActionKind: String, CaseIterable, Codable, Hashable, Identifiabl
   case dismiss
   case delete
   case edit
-  case uploadToCloud
+  case uploadTemporary
+  case uploadPermanent
   case pinToScreen
 
   var id: String { rawValue }
@@ -87,7 +88,8 @@ enum QuickAccessActionKind: String, CaseIterable, Codable, Hashable, Identifiabl
     .dismiss,
     .delete,
     .edit,
-    .uploadToCloud,
+    .uploadTemporary,
+    .uploadPermanent,
     .pinToScreen,
   ]
 
@@ -97,7 +99,7 @@ enum QuickAccessActionKind: String, CaseIterable, Codable, Hashable, Identifiabl
     switch self {
     case .copy, .saveOrOpen:
       return .primary
-    case .dismiss, .delete, .edit, .uploadToCloud, .pinToScreen:
+    case .dismiss, .delete, .edit, .uploadTemporary, .uploadPermanent, .pinToScreen:
       return .corner
     }
   }
@@ -114,8 +116,10 @@ enum QuickAccessActionKind: String, CaseIterable, Codable, Hashable, Identifiabl
       return L10n.Common.deleteAction
     case .edit:
       return L10n.PreferencesQuickAccess.editAction
-    case .uploadToCloud:
-      return L10n.AnnotateUI.uploadToCloud
+    case .uploadTemporary:
+      return "Upload Temporarily"
+    case .uploadPermanent:
+      return "Upload Permanently"
     case .pinToScreen:
       return L10n.PreferencesQuickAccess.pinToScreenAction
     }
@@ -134,7 +138,7 @@ enum QuickAccessActionKind: String, CaseIterable, Codable, Hashable, Identifiabl
     switch self {
     case .dismiss, .delete:
       return true
-    case .copy, .saveOrOpen, .edit, .uploadToCloud, .pinToScreen:
+    case .copy, .saveOrOpen, .edit, .uploadTemporary, .uploadPermanent, .pinToScreen:
       return false
     }
   }
@@ -157,7 +161,9 @@ enum QuickAccessActionKind: String, CaseIterable, Codable, Hashable, Identifiabl
       return "trash"
     case .edit:
       return "pencil"
-    case .uploadToCloud:
+    case .uploadTemporary:
+      return "icloud.and.arrow.up"
+    case .uploadPermanent:
       return "icloud.and.arrow.up"
     case .pinToScreen:
       return "pin"

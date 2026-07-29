@@ -30,6 +30,7 @@ final class R2CloudProvider: CloudProvider {
       region: "auto",
       endpoint: config.endpoint,
       customDomain: config.customDomain,
+      storageID: config.storageID,
       expireTime: config.expireTime
     )
     self.s3Provider = S3CloudProvider(
@@ -45,6 +46,7 @@ final class R2CloudProvider: CloudProvider {
   func upload(
     fileURL: URL,
     contentType: String,
+    destination: CloudUploadDestination,
     expireTime: CloudExpireTime,
     existingKey: String? = nil,
     progress: @escaping @Sendable (Double) -> Void
@@ -53,6 +55,7 @@ final class R2CloudProvider: CloudProvider {
     return try await s3Provider.upload(
       fileURL: fileURL,
       contentType: contentType,
+      destination: destination,
       expireTime: expireTime,
       existingKey: existingKey,
       progress: progress

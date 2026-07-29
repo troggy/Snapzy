@@ -10,6 +10,38 @@ import XCTest
 
 @MainActor
 final class SnapzyConfigurationImporterTests: XCTestCase {
+  func testImportAppliesValidCloudStorageID() {
+    let defaults = UserDefaultsFactory.make()
+    let storageID = "0123456789abcdef0123456789abcdef"
+    let source = """
+    schema_version = 1
+
+    [cloud]
+    storage_id = "\(storageID)"
+    """
+
+    let result = SnapzyConfigurationImporter.importTOML(source, defaults: defaults)
+
+    XCTAssertFalse(result.hasErrors)
+    XCTAssertEqual(defaults.string(forKey: PreferencesKeys.cloudStorageID), storageID)
+  }
+
+  func testImportIgnoresInvalidCloudStorageID() {
+    let defaults = UserDefaultsFactory.make()
+    defaults.set("0123456789abcdef0123456789abcdef", forKey: PreferencesKeys.cloudStorageID)
+    let source = """
+    schema_version = 1
+
+    [cloud]
+    storage_id = "not-a-storage-id"
+    """
+
+    let result = SnapzyConfigurationImporter.importTOML(source, defaults: defaults)
+
+    XCTAssertFalse(result.hasErrors)
+    XCTAssertEqual(defaults.string(forKey: PreferencesKeys.cloudStorageID), "0123456789abcdef0123456789abcdef")
+  }
+
   func testImportAppliesCaptureAndRecordingSettingsToProvidedDefaults() {
     let defaults = UserDefaultsFactory.make()
     let source = """

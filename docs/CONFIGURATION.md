@@ -52,7 +52,7 @@ The TOML file covers portable app preferences:
 - Recording settings: format, quality, FPS, audio, microphone device id, cursor, click highlights, keystroke overlay, live annotation shortcuts, video editor zoom transition duration.
 - Quick Access: visibility, position, countdown behavior, gesture toggles, trackpad swipe mode, swipe left/right actions, hide card when window open, animation style, action order, enabled actions, card slots.
 - History: retention, maximum count, floating panel layout and filter.
-- Cloud metadata: provider, bucket, region, endpoint, custom domain, expiration, and upload window position.
+- Cloud metadata: provider, bucket, region, endpoint, custom domain, provisioned storage ID, expiration, and upload window position.
 - Annotate preferences.
 - Global, overlay, Annotate tool, and Annotate action shortcuts.
 

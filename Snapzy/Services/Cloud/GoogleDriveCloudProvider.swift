@@ -42,6 +42,7 @@ final class GoogleDriveCloudProvider: CloudProvider {
   func upload(
     fileURL: URL,
     contentType: String,
+    destination _: CloudUploadDestination,
     expireTime: CloudExpireTime,
     existingKey: String? = nil,
     progress: @escaping @Sendable (Double) -> Void

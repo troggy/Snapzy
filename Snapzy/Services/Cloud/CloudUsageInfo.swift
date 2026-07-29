@@ -12,7 +12,7 @@ struct CloudUsageInfo: Codable, Equatable {
   let providerType: CloudProviderType
   let totalStorageBytes: Int64
   let objectCount: Int
-  /// Active lifecycle rule expiration days for snapzy/ prefix, nil if none
+  /// Legacy lifecycle field retained for cached usage compatibility; managed uploads do not query it.
   let lifecycleRuleDays: Int?
   let fetchedAt: Date
 

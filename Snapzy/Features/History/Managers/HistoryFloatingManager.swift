@@ -338,7 +338,7 @@ final class HistoryFloatingManager: ObservableObject {
           throw CloudError.fileNotFound(record.fileURL)
         }
 
-        let result = try await CloudManager.shared.upload(fileURL: record.fileURL)
+        let result = try await CloudManager.shared.upload(fileURL: record.fileURL, destination: .permanent)
 
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()

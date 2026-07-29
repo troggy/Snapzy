@@ -77,6 +77,9 @@ final class CloudManager: ObservableObject {
     secretKey: String,
     googleRefreshToken: String? = nil
   ) throws {
+    guard config.isValid else {
+      throw CloudError.notConfigured
+    }
     DiagnosticLogger.shared.log(
       .info,
       .cloud,
@@ -123,6 +126,7 @@ final class CloudManager: ObservableObject {
     defaults.set(isGoogle ? "" : config.region, forKey: PreferencesKeys.cloudRegion)
     defaults.set(isGoogle ? "" : (config.endpoint ?? ""), forKey: PreferencesKeys.cloudEndpoint)
     defaults.set(isGoogle ? "" : (config.customDomain ?? ""), forKey: PreferencesKeys.cloudCustomDomain)
+    defaults.set(isGoogle ? "" : config.storageID, forKey: PreferencesKeys.cloudStorageID)
     defaults.set(finalExpireTime.rawValue, forKey: PreferencesKeys.cloudExpireTime)
     defaults.set(true, forKey: PreferencesKeys.cloudConfigured)
 
@@ -136,6 +140,7 @@ final class CloudManager: ObservableObject {
       region: isGoogle ? "" : config.region,
       endpoint: isGoogle ? nil : config.endpoint,
       customDomain: isGoogle ? nil : config.customDomain,
+      storageID: isGoogle ? "" : config.storageID,
       expireTime: finalExpireTime
     )
     cachedConfiguration = finalConfig
@@ -217,6 +222,7 @@ final class CloudManager: ObservableObject {
     let region = defaults.string(forKey: PreferencesKeys.cloudRegion) ?? ""
     let endpoint = defaults.string(forKey: PreferencesKeys.cloudEndpoint)
     let customDomain = defaults.string(forKey: PreferencesKeys.cloudCustomDomain)
+    let storageID = defaults.string(forKey: PreferencesKeys.cloudStorageID) ?? ""
     let expireRaw = defaults.string(forKey: PreferencesKeys.cloudExpireTime) ?? CloudExpireTime.day7.rawValue
     // Use standard init first, fallback to legacy migration for old hour/minute values
     let expireTime = CloudExpireTime(rawValue: expireRaw) ?? CloudExpireTime(legacyRawValue: expireRaw)
@@ -227,6 +233,7 @@ final class CloudManager: ObservableObject {
       region: region,
       endpoint: (endpoint?.isEmpty ?? true) ? nil : endpoint,
       customDomain: (customDomain?.isEmpty ?? true) ? nil : customDomain,
+      storageID: storageID,
       expireTime: expireTime
     )
   }
@@ -361,6 +368,7 @@ final class CloudManager: ObservableObject {
     defaults.removeObject(forKey: PreferencesKeys.cloudRegion)
     defaults.removeObject(forKey: PreferencesKeys.cloudEndpoint)
     defaults.removeObject(forKey: PreferencesKeys.cloudCustomDomain)
+    defaults.removeObject(forKey: PreferencesKeys.cloudStorageID)
     defaults.removeObject(forKey: PreferencesKeys.cloudExpireTime)
     defaults.set(false, forKey: PreferencesKeys.cloudConfigured)
     defaults.removeObject(forKey: PreferencesKeys.cloudPasswordSkipped)
@@ -588,12 +596,17 @@ final class CloudManager: ObservableObject {
 
   // MARK: - Upload
 
-  /// Upload a file to the configured cloud provider.
+  /// Upload a file to the configured cloud provider's explicit destination.
   /// Updates `isUploading` and `uploadProgress` for UI binding.
   /// - Parameter existingKey: If provided, overwrites existing cloud object with same key
-  func upload(fileURL: URL, existingKey: String? = nil) async throws -> CloudUploadResult {
+  func upload(
+    fileURL: URL,
+    destination: CloudUploadDestination,
+    existingKey: String? = nil
+  ) async throws -> CloudUploadResult {
     guard let provider = createProvider(),
-      let config = loadConfiguration()
+      let config = loadConfiguration(),
+      config.isValid
     else {
       DiagnosticLogger.shared.log(
         .warning,
@@ -605,6 +618,7 @@ final class CloudManager: ObservableObject {
     }
 
     let contentType = mimeType(for: fileURL)
+    let uploadExpireTime: CloudExpireTime = destination == .temporary ? .day14 : .permanent
     DiagnosticLogger.shared.log(
       .info,
       .cloud,
@@ -614,6 +628,7 @@ final class CloudManager: ObservableObject {
         extra: [
           "fileName": fileURL.lastPathComponent,
           "contentType": contentType,
+          "destination": destination.rawValue,
           "hasExistingKey": existingKey == nil ? "false" : "true",
         ]
       )
@@ -629,7 +644,8 @@ final class CloudManager: ObservableObject {
       let result = try await provider.upload(
         fileURL: fileURL,
         contentType: contentType,
-        expireTime: config.expireTime,
+        destination: destination,
+        expireTime: uploadExpireTime,
         existingKey: existingKey,
         progress: { [weak self] progress in
           DispatchQueue.main.async {
@@ -648,7 +664,7 @@ final class CloudManager: ObservableObject {
         fileSize: result.fileSize,
         uploadedAt: result.uploadedAt,
         providerType: provider.providerType,
-        expireTime: config.expireTime,
+        expireTime: uploadExpireTime,
         contentType: contentType
       )
       CloudUploadHistoryStore.shared.add(record)
@@ -670,6 +686,7 @@ final class CloudManager: ObservableObject {
           extra: [
             "fileName": fileURL.lastPathComponent,
             "contentType": contentType,
+            "destination": destination.rawValue,
             "fileSize": "\(result.fileSize)",
           ]
         )
@@ -686,6 +703,7 @@ final class CloudManager: ObservableObject {
           extra: [
             "fileName": fileURL.lastPathComponent,
             "contentType": contentType,
+            "destination": destination.rawValue,
             "hasExistingKey": existingKey == nil ? "false" : "true",
           ]
         )
@@ -1039,6 +1057,7 @@ final class CloudManager: ObservableObject {
     var context = extra
     context["provider"] = config.providerType.rawValue
     context["expireTime"] = config.expireTime.rawValue
+    context["hasStorageID"] = config.storageID.isEmpty ? "false" : "true"
     context["hasEndpoint"] = config.endpoint?.isEmpty == false ? "true" : "false"
     context["hasCustomDomain"] = config.customDomain?.isEmpty == false ? "true" : "false"
     return context

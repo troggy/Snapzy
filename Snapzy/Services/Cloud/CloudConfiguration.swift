@@ -82,7 +82,57 @@ struct CloudConfiguration: Codable, Equatable {
   let region: String
   let endpoint: String?
   let customDomain: String?
+  /// Company-assigned identifier that scopes this installation's managed objects.
+  let storageID: String
   let expireTime: CloudExpireTime
+
+  init(
+    providerType: CloudProviderType,
+    bucket: String,
+    region: String,
+    endpoint: String?,
+    customDomain: String?,
+    storageID: String = "",
+    expireTime: CloudExpireTime
+  ) {
+    self.providerType = providerType
+    self.bucket = bucket
+    self.region = region
+    self.endpoint = endpoint
+    self.customDomain = customDomain
+    self.storageID = storageID
+    self.expireTime = expireTime
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case providerType
+    case bucket
+    case region
+    case endpoint
+    case customDomain
+    case storageID
+    case expireTime
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    providerType = try container.decode(CloudProviderType.self, forKey: .providerType)
+    bucket = try container.decode(String.self, forKey: .bucket)
+    region = try container.decode(String.self, forKey: .region)
+    endpoint = try container.decodeIfPresent(String.self, forKey: .endpoint)
+    customDomain = try container.decodeIfPresent(String.self, forKey: .customDomain)
+    // Archives created before managed storage used no storage ID.
+    storageID = try container.decodeIfPresent(String.self, forKey: .storageID) ?? ""
+    expireTime = try container.decode(CloudExpireTime.self, forKey: .expireTime)
+  }
+
+  var isStorageIDValid: Bool {
+    Self.isValidStorageID(storageID)
+  }
+
+  static func isValidStorageID(_ value: String) -> Bool {
+    value.count == 32 && value.allSatisfy { "0123456789abcdef".contains($0) }
+  }
 
   /// Validate that required fields are present
   var isValid: Bool {
@@ -90,9 +140,11 @@ struct CloudConfiguration: Codable, Equatable {
     case .awsS3:
       return !bucket.trimmingCharacters(in: .whitespaces).isEmpty
         && !region.trimmingCharacters(in: .whitespaces).isEmpty
+        && isStorageIDValid
     case .cloudflareR2:
       return !bucket.trimmingCharacters(in: .whitespaces).isEmpty
         && !(endpoint ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+        && isStorageIDValid
     case .googleDrive:
       // googleDrive doesn't require bucket/region/endpoint fields to be validated here,
       // and default folder name "Snapzy" is used if bucket is empty.

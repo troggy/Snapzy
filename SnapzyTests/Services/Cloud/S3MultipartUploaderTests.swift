@@ -87,6 +87,7 @@ final class S3MultipartUploaderTests: XCTestCase {
     let result = try await uploader.upload(
       fileURL: tempFileURL,
       key: "test-key.bin",
+      destination: .temporary,
       contentType: "application/octet-stream",
       expireTime: .day7
     ) { progress in
@@ -164,6 +165,7 @@ final class S3MultipartUploaderTests: XCTestCase {
       _ = try await uploader.upload(
         fileURL: tempFileURL,
         key: "test-key.bin",
+        destination: .temporary,
         contentType: "application/octet-stream",
         expireTime: .day7,
         progress: { _ in }
