@@ -990,7 +990,7 @@ private struct CloudCredentialFormView: View {
           SettingRow(
             icon: "number",
             title: "Storage ID",
-            description: "32 lowercase hexadecimal characters",
+            description: "5 lowercase base32 characters",
             tooltip: nil
           ) {
             TextField("", text: $storageID)

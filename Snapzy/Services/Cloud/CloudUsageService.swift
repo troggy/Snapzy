@@ -38,7 +38,7 @@ private actor CloudUsageWorker {
       region: context.region,
       accessKey: accessKey,
       secretKey: secretKey,
-      prefix: "temporary/\(config.storageID)/"
+      prefix: "t/\(config.storageID)/"
     )
     let permanentUsage = try await listAllObjects(
       config: config,
@@ -46,7 +46,7 @@ private actor CloudUsageWorker {
       region: context.region,
       accessKey: accessKey,
       secretKey: secretKey,
-      prefix: "permanent/\(config.storageID)/"
+      prefix: "p/\(config.storageID)/"
     )
 
     return CloudUsageInfo(

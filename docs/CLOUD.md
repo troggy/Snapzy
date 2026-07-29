@@ -33,7 +33,7 @@ flowchart LR
 ```
 
 - `CloudProvider` protocol (`CloudProvider.swift`): `upload(fileURL:contentType:destination:expireTime:existingKey:progress:)`, `generatePublicURL(for:)`, `delete(key:)`, lifecycle compatibility methods, and `validate()`. Managed AWS S3 configuration never invokes the lifecycle methods.
-- `S3CloudProvider`: pure-Foundation SigV4 signing (`AWSV4Signer`), path-style URLs, multipart above 50 MB (`S3MultipartUploader.multipartThreshold`, 10 MB parts), optional custom domain for public URLs. Managed objects use `temporary/<storage-id>/<uuid>.<extension>` or `permanent/<storage-id>/<uuid>.<extension>`.
+- `S3CloudProvider`: pure-Foundation SigV4 signing (`AWSV4Signer`), path-style URLs, multipart above 50 MB (`S3MultipartUploader.multipartThreshold`, 10 MB parts), optional custom domain for public URLs. Managed objects use `t/<storage-id>/<uuid>.<extension>` or `p/<storage-id>/<uuid>.<extension>`.
 - `R2CloudProvider`: thin wrapper over S3 with `region = "auto"` and the account endpoint.
 - `GoogleDriveCloudProvider`: OAuth desktop flow via `GoogleDriveOAuthService` (NWListener loopback on `127.0.0.1`), uploads into a named folder (default `Snapzy`, cached folder ID), multipart for ≤5 MB else resumable, sets anyone-with-link reader permission. Lifecycle/expiration **unsupported** (`setExpiration`/`removeExpiration` are no-ops) → expire time forced to permanent for this provider.
 - `CloudManager` (`CloudManager.swift`): facade — non-secret config in UserDefaults (`cloud.*` keys), secrets in Keychain, upload orchestration with `isUploading`/`uploadProgress`, history record insert, thumbnail generation (200 px max-dimension JPEG in `Application Support/Snapzy/thumbnails/<recordUUID>.jpg`; video uploads get frame thumbnails).
@@ -49,9 +49,9 @@ flowchart LR
 `PreferencesCloudSettingsView.swift` (+ import/export sheets):
 
 - Provider picker (AWS S3 / Cloudflare R2 / Google Drive).
-- S3/R2: access key + secret key, bucket, region (S3) or endpoint (R2), optional custom domain, and a provisioned 32-character storage ID.
+- S3/R2: access key + secret key, bucket, region (S3) or endpoint (R2), optional custom domain, and a provisioned five-character lowercase base32 storage ID.
 - Google Drive: client ID + secret + OAuth authorize, folder name.
-- AWS S3 retention is selected at upload time: temporary uploads expire under the infrastructure-managed `temporary/` rule, while permanent uploads are retained. Snapzy never changes bucket lifecycle rules.
+- AWS S3 retention is selected at upload time: temporary uploads expire under the infrastructure-managed `t/` rule, while permanent uploads are retained in `p/`. Snapzy never changes bucket lifecycle rules.
 - Optional protection password on save.
 - Save & Test: `validate()` credentials before persisting.
 - Configured state: masked summary (access key masked, "stored securely in Keychain") + Edit (password-gated) / Import / Export (`.snapzycloud`) / Reset.

@@ -176,7 +176,7 @@ final class CloudCoreTests: XCTestCase {
       region: "us-east-1",
       endpoint: nil,
       customDomain: nil,
-      storageID: "0123456789abcdef0123456789abcdef",
+      storageID: "abc23",
       expireTime: .day7
     ).isValid)
 
@@ -186,7 +186,7 @@ final class CloudCoreTests: XCTestCase {
       region: "   ",
       endpoint: nil,
       customDomain: nil,
-      storageID: "0123456789abcdef0123456789abcdef",
+      storageID: "abc23",
       expireTime: .day7
     ).isValid)
 
@@ -196,7 +196,7 @@ final class CloudCoreTests: XCTestCase {
       region: "",
       endpoint: "https://account.r2.cloudflarestorage.com",
       customDomain: nil,
-      storageID: "0123456789abcdef0123456789abcdef",
+      storageID: "abc23",
       expireTime: .day7
     ).isValid)
 
@@ -211,8 +211,8 @@ final class CloudCoreTests: XCTestCase {
     ).isValid)
   }
 
-  func testCloudConfigurationValidation_requiresLowercase32CharacterStorageID() {
-    let validID = "0123456789abcdef0123456789abcdef"
+  func testCloudConfigurationValidation_requiresLowercaseFiveCharacterStorageID() {
+    let validID = "abc23"
     XCTAssertTrue(CloudConfiguration(
       providerType: .awsS3,
       bucket: "snapzy",
@@ -231,6 +231,9 @@ final class CloudCoreTests: XCTestCase {
       storageID: validID.uppercased(),
       expireTime: .day7
     ).isStorageIDValid)
+    for invalidID in ["abcd", "abcdef", "abci2", "abcl2", "abco2", "abc02", "abc12"] {
+      XCTAssertFalse(CloudConfiguration.isValidStorageID(invalidID), "\(invalidID) should be rejected")
+    }
   }
 
   func testCloudConfigurationDecodesLegacyArchiveWithoutStorageID() throws {
@@ -281,7 +284,7 @@ final class CloudCoreTests: XCTestCase {
         region: "us-east-1",
         endpoint: nil,
         customDomain: "cdn.example.com",
-        storageID: "0123456789abcdef0123456789abcdef",
+        storageID: "abc23",
         expireTime: .day30
       ),
       accessKey: "AKIATEST",
@@ -317,7 +320,7 @@ final class CloudCoreTests: XCTestCase {
       region: "us-east-1",
       endpoint: nil,
       customDomain: nil,
-      storageID: "0123456789abcdef0123456789abcdef",
+      storageID: "abc23",
       expireTime: .day7
     )
     let mockSession = MockURLSession { request in
@@ -332,7 +335,7 @@ final class CloudCoreTests: XCTestCase {
     XCTAssertTrue(mockSession.requests.first?.url?.absoluteString.contains("test-bucket") == true)
     let queryItems = URLComponents(url: try XCTUnwrap(mockSession.requests.first?.url), resolvingAgainstBaseURL: false)?.queryItems
     XCTAssertEqual(queryItems?.first { $0.name == "list-type" }?.value, "2")
-    XCTAssertEqual(queryItems?.first { $0.name == "prefix" }?.value, "temporary/0123456789abcdef0123456789abcdef/")
+    XCTAssertEqual(queryItems?.first { $0.name == "prefix" }?.value, "t/abc23/")
   }
 
   func testS3CloudProvider_validate_403throwsInvalidCredentials() async throws {
@@ -342,7 +345,7 @@ final class CloudCoreTests: XCTestCase {
       region: "us-east-1",
       endpoint: nil,
       customDomain: nil,
-      storageID: "0123456789abcdef0123456789abcdef",
+      storageID: "abc23",
       expireTime: .day7
     )
     let mockSession = MockURLSession { request in

@@ -131,7 +131,7 @@ struct CloudConfiguration: Codable, Equatable {
   }
 
   static func isValidStorageID(_ value: String) -> Bool {
-    value.count == 32 && value.allSatisfy { "0123456789abcdef".contains($0) }
+    value.count == 5 && value.allSatisfy { "abcdefghjkmnpqrstuvwxyz23456789".contains($0) }
   }
 
   /// Validate that required fields are present

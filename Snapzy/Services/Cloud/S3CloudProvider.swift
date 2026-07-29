@@ -160,7 +160,7 @@ final class S3CloudProvider: CloudProvider {
     var components = URLComponents(url: endpoint.appendingPathComponent(bucket), resolvingAgainstBaseURL: false)!
     components.queryItems = [
       URLQueryItem(name: "list-type", value: "2"),
-      URLQueryItem(name: "prefix", value: "temporary/\(storageID)/"),
+      URLQueryItem(name: "prefix", value: "t/\(storageID)/"),
       URLQueryItem(name: "max-keys", value: "1"),
     ]
     let url = components.url!

@@ -36,8 +36,8 @@ struct CloudUploadResult {
 
 /// Managed S3 namespace for an uploaded object.
 enum CloudUploadDestination: String, Codable, CaseIterable, Sendable {
-  case temporary
-  case permanent
+  case temporary = "t"
+  case permanent = "p"
 }
 
 // MARK: - Cloud Provider Protocol

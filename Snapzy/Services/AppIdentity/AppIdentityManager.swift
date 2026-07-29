@@ -99,10 +99,9 @@ final class AppIdentityManager: ObservableObject {
       }
     }
 
-    // Skip strict signature validation in debug builds — Xcode uses ad-hoc
-    // signing which always fails kSecCSStrictValidate, blocking the entire
-    // permission flow during development.
-    #if !DEBUG
+    // The manually dispatched GitHub workflow explicitly marks its unsigned
+    // artifact. Keep strict validation for every normal release build.
+    #if !(DEBUG || SNAPZY_ALLOW_UNSIGNED_BUILD)
     if !hasValidBundleSignature(bundleURL) {
       issues.append(.invalidBundleSignature)
     }
