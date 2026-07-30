@@ -550,19 +550,31 @@ final class ScreenCaptureViewModel: ObservableObject, KeyboardShortcutDelegate {
       return
     }
 
+    isAreaSelectionActive = true
+    Task {
+      guard await captureManager.requestPermission() else {
+        isAreaSelectionActive = false
+        lastCaptureResult = .failure(.permissionDenied)
+        DiagnosticLogger.shared.log(.warning, .capture, "Area capture blocked: screen recording permission not granted")
+        return
+      }
+      beginAreaCapture(initialInteractionMode: initialInteractionMode)
+    }
+  }
+
+  private func beginAreaCapture(initialInteractionMode: AreaSelectionInteractionMode) {
     guard
       let resolvedSaveDirectory = fileAccessManager.ensureExportDirectoryForOperation(
         promptMessage: L10n.Recording.chooseSaveLocationMessage
       )
     else {
+      isAreaSelectionActive = false
       lastCaptureResult = .failure(.saveFailed(L10n.ScreenCapture.saveLocationPermissionRequired))
       return
     }
     saveDirectory = resolvedSaveDirectory
 
     let captureContext = CaptureContext.fromFrontmostApp()
-    // Set flag BEFORE delay to close the race window
-    isAreaSelectionActive = true
     DiagnosticLogger.shared.log(.info, .capture, "Area capture flow started", context: [
       "format": resolvedFormat.fileExtension,
       "initialMode": initialInteractionMode == .applicationWindow ? "application" : "manual",
