@@ -65,13 +65,16 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            SWIFT_ACTIVE_COMPILATION_CONDITIONS="SNAPZY_ALLOW_UNSIGNED_BUILD" \
             ONLY_ACTIVE_ARCH=NO \
             build | tee build/manual-build.log
 
           APP_PATH="build/DerivedData/Build/Products/Release/Snapzy.app"
           test -d "$APP_PATH"
           test -x "$APP_PATH/Contents/MacOS/Snapzy"
+
+          # TCC requires a valid bundle signature, not the linker-signed executable.
+          codesign --force --deep --sign - "$APP_PATH"
+          codesign --verify --strict --deep --verbose=4 "$APP_PATH"
 
           ditto -c -k --keepParent "$APP_PATH" build/Snapzy-unsigned-macos.zip
 
