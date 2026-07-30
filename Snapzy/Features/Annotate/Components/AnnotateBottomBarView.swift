@@ -53,6 +53,7 @@ struct AnnotateBottomBarView: View {
   @State private var cloudUploadError: String?
   @State private var showCloudNotConfiguredAlert = false
   @State private var showOverwriteConfirmation = false
+  @State private var pendingCloudDestination: CloudUploadDestination?
   @State private var measuredLeftWidth: CGFloat = 0
   @State private var measuredRightWidth: CGFloat = 0
 
@@ -90,10 +91,13 @@ struct AnnotateBottomBarView: View {
     }
     .alert(L10n.AnnotateUI.overwriteCloudFileTitle, isPresented: $showOverwriteConfirmation) {
       Button(L10n.Common.overwrite) {
-        handleCloudUpload()
+        handleCloudUpload(destination: pendingCloudDestination ?? .permanent)
+        pendingCloudDestination = nil
       }
       .keyboardShortcut(.defaultAction)
-      Button(L10n.Common.cancel, role: .cancel) {}
+      Button(L10n.Common.cancel, role: .cancel) {
+        pendingCloudDestination = nil
+      }
     } message: {
       Text(L10n.AnnotateUI.overwriteCloudFileMessage)
     }
@@ -381,28 +385,38 @@ struct AnnotateBottomBarView: View {
         share()
       }
 
-      // Cloud upload button
+      // Cloud upload buttons. Each destination remains independently available
+      // so an annotated image can be sent to the desired retention namespace.
       if showCloudButton {
         // needsReUpload: true when output changed in current session OR was changed since last upload
         let needsReUpload = state.requiresRenderedOutputForSharing || state.isCloudStale
-        let alreadyUploaded = state.cloudURL != nil && !needsReUpload
-        BottomBarButton(
-          icon: alreadyUploaded ? "checkmark.icloud" : "icloud.and.arrow.up",
-          tooltip: alreadyUploaded
-            ? L10n.AnnotateUI.uploadedToCloud
-            : tooltipText(
-              state.cloudKey != nil ? L10n.AnnotateUI.reuploadToCloud : L10n.AnnotateUI.uploadToCloud,
-              shortcut: cloudUploadShortcut
-            )
-        ) {
-          if state.cloudKey != nil && needsReUpload {
-            showOverwriteConfirmation = true
-          } else {
-            handleCloudUpload()
+        if QuickAccessActionConfigurationStore.shared.isEnabled(.uploadTemporary) {
+          let alreadyUploaded = alreadyUploadedToCloud(destination: .temporary, needsReUpload: needsReUpload)
+          BottomBarButton(
+            icon: alreadyUploaded ? "checkmark.icloud" : "icloud.and.arrow.up",
+            tooltip: alreadyUploaded
+              ? L10n.AnnotateUI.uploadedToCloud
+              : "Upload temporarily"
+          ) {
+            requestCloudUpload(destination: .temporary, needsReUpload: needsReUpload)
           }
+          .disabled(isCloudUploading || alreadyUploaded)
+          .opacity(alreadyUploaded ? 0.6 : 1)
         }
-        .disabled(isCloudUploading || alreadyUploaded)
-        .opacity(alreadyUploaded ? 0.6 : 1)
+
+        if QuickAccessActionConfigurationStore.shared.isEnabled(.uploadPermanent) {
+          let alreadyUploaded = alreadyUploadedToCloud(destination: .permanent, needsReUpload: needsReUpload)
+          BottomBarButton(
+            icon: alreadyUploaded ? "checkmark.icloud" : "icloud.and.arrow.up.fill",
+            tooltip: alreadyUploaded
+              ? L10n.AnnotateUI.uploadedToCloud
+              : tooltipText("Upload permanently", shortcut: cloudUploadShortcut)
+          ) {
+            requestCloudUpload(destination: .permanent, needsReUpload: needsReUpload)
+          }
+          .disabled(isCloudUploading || alreadyUploaded)
+          .opacity(alreadyUploaded ? 0.6 : 1)
+        }
       }
 
       BottomBarButton(
@@ -520,7 +534,20 @@ struct AnnotateBottomBarView: View {
     }
   }
 
-  private func handleCloudUpload() {
+  private func alreadyUploadedToCloud(destination: CloudUploadDestination, needsReUpload: Bool) -> Bool {
+    state.cloudKey?.hasPrefix("\(destination.rawValue)/") == true && !needsReUpload
+  }
+
+  private func requestCloudUpload(destination: CloudUploadDestination, needsReUpload: Bool) {
+    if state.cloudKey != nil && needsReUpload {
+      pendingCloudDestination = destination
+      showOverwriteConfirmation = true
+    } else {
+      handleCloudUpload(destination: destination)
+    }
+  }
+
+  private func handleCloudUpload(destination: CloudUploadDestination = .permanent) {
     guard cloudManager.isConfigured else {
       DiagnosticLogger.shared.log(.warning, .cloud, "Annotate cloud upload skipped; cloud not configured")
       showCloudNotConfiguredAlert = true
@@ -567,7 +594,11 @@ struct AnnotateBottomBarView: View {
       .info,
       .cloud,
       "Annotate cloud upload started",
-      context: ["fileName": sourceURL.lastPathComponent, "hasOldCloudKey": state.cloudKey == nil ? "false" : "true"]
+      context: [
+        "fileName": sourceURL.lastPathComponent,
+        "destination": destination.rawValue,
+        "hasOldCloudKey": state.cloudKey == nil ? "false" : "true",
+      ]
     )
 
     // Animate to 80% quickly to show activity
@@ -591,7 +622,7 @@ struct AnnotateBottomBarView: View {
         defer { fileAccess.stop() }
 
         // Always upload with a fresh key (new URL avoids CDN cache issues)
-        let result = try await cloudManager.upload(fileURL: uploadURL, destination: .permanent)
+        let result = try await cloudManager.upload(fileURL: uploadURL, destination: destination)
 
         // Delete the old cloud file in background (no garbage)
         if let oldKey = oldCloudKey {
@@ -642,7 +673,7 @@ struct AnnotateBottomBarView: View {
           .info,
           .cloud,
           "Annotate cloud upload completed",
-          context: ["fileName": sourceURL.lastPathComponent]
+          context: ["fileName": sourceURL.lastPathComponent, "destination": destination.rawValue]
         )
 
         // Close window
@@ -657,7 +688,7 @@ struct AnnotateBottomBarView: View {
           .cloud,
           error,
           "Annotate cloud upload failed",
-          context: ["fileName": sourceURL.lastPathComponent]
+          context: ["fileName": sourceURL.lastPathComponent, "destination": destination.rawValue]
         )
       }
     }
