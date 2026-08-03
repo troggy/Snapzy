@@ -17,6 +17,12 @@ private enum AnnotateBottomBarMeasuredSide: Hashable {
   case right
 }
 
+enum AnnotateCloudUploadTarget {
+  static func usesTemporaryRenderedFile(sourceURL: URL?, isProtectedManualCombine: Bool) -> Bool {
+    sourceURL == nil || isProtectedManualCombine
+  }
+}
+
 private struct AnnotateBottomBarWidthPreferenceKey: PreferenceKey {
   static let defaultValue: [AnnotateBottomBarMeasuredSide: CGFloat] = [:]
 
@@ -554,28 +560,28 @@ struct AnnotateBottomBarView: View {
       return
     }
 
-    guard let sourceURL = state.sourceURL else {
-      DiagnosticLogger.shared.log(.warning, .cloud, "Annotate cloud upload skipped; source URL missing")
-      return
-    }
-
     // Step 1: Render flattened image with annotations BEFORE uploading
     let sessionSnapshot = AnnotateManager.shared.makeSessionData(for: state)
     let renderedImage = AnnotateExporter.renderFinalImage(state: state)
 
-    // Step 2: Decide the upload target. Manual combine sessions must NOT overwrite the
-    // user's picked source file with the stitched render, so upload a temporary rendered
-    // copy instead and leave the source untouched.
+    // Step 2: Decide the upload target. In-memory imports have no backing file, and manual
+    // combine sessions must not overwrite the user's picked source file. Both upload a
+    // temporary rendered copy instead.
+    let sourceURL = state.sourceURL
     let isProtectedManualCombine = state.isCombineMode && state.isManualImportSession
+    let usesTemporaryRenderedFile = AnnotateCloudUploadTarget.usesTemporaryRenderedFile(
+      sourceURL: sourceURL,
+      isProtectedManualCombine: isProtectedManualCombine
+    )
     let uploadURL: URL
-    if isProtectedManualCombine {
+    if usesTemporaryRenderedFile {
       guard let renderedImage, let tempURL = writeRenderedImageToTemporaryFile(renderedImage) else {
         DiagnosticLogger.shared.log(.error, .cloud, "Annotate cloud upload skipped; temp render failed")
         cloudUploadError = L10n.AnnotateUI.saveFailedMessage
         return
       }
       uploadURL = tempURL
-    } else {
+    } else if let sourceURL {
       uploadURL = sourceURL
       // Save rendered image to disk (so the file includes annotations)
       if let renderedImage = renderedImage {
@@ -586,7 +592,11 @@ struct AnnotateBottomBarView: View {
           AnnotationSessionStore.shared.persist(sessionSnapshot, for: sourceURL)
         }
       }
+    } else {
+      return
     }
+
+    let uploadedFileName = sourceURL?.lastPathComponent ?? uploadURL.lastPathComponent
 
     isCloudUploading = true
     cloudUploadProgress = 0
@@ -595,7 +605,7 @@ struct AnnotateBottomBarView: View {
       .cloud,
       "Annotate cloud upload started",
       context: [
-        "fileName": sourceURL.lastPathComponent,
+        "fileName": uploadedFileName,
         "destination": destination.rawValue,
         "hasOldCloudKey": state.cloudKey == nil ? "false" : "true",
       ]
@@ -610,10 +620,9 @@ struct AnnotateBottomBarView: View {
     let oldCloudKey = state.cloudKey  // Save old key for cleanup after successful upload
 
     Task {
-      // Remove the temporary rendered file (manual combine) once the upload finishes,
-      // whether it succeeds or fails.
+      // Remove the temporary rendered file once the upload finishes, whether it succeeds or fails.
       defer {
-        if isProtectedManualCombine {
+        if usesTemporaryRenderedFile {
           try? FileManager.default.removeItem(at: uploadURL)
         }
       }
@@ -673,7 +682,7 @@ struct AnnotateBottomBarView: View {
           .info,
           .cloud,
           "Annotate cloud upload completed",
-          context: ["fileName": sourceURL.lastPathComponent, "destination": destination.rawValue]
+          context: ["fileName": uploadedFileName, "destination": destination.rawValue]
         )
 
         // Close window
@@ -688,7 +697,7 @@ struct AnnotateBottomBarView: View {
           .cloud,
           error,
           "Annotate cloud upload failed",
-          context: ["fileName": sourceURL.lastPathComponent, "destination": destination.rawValue]
+          context: ["fileName": uploadedFileName, "destination": destination.rawValue]
         )
       }
     }

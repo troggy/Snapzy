@@ -225,4 +225,32 @@ final class AnnotateImageOpsTests: XCTestCase {
     XCTAssertTrue(accepted)
     XCTAssertEqual(state.annotations.count, 1)
   }
+
+  // MARK: - Cloud upload target
+
+  func testCloudUploadWithoutSourceFileUsesTemporaryRenderedFile() {
+    XCTAssertTrue(
+      AnnotateCloudUploadTarget.usesTemporaryRenderedFile(
+        sourceURL: nil,
+        isProtectedManualCombine: false
+      )
+    )
+  }
+
+  func testCloudUploadWithSourceFileUsesSourceFileUnlessManualCombineIsProtected() {
+    let sourceURL = URL(fileURLWithPath: "/tmp/image.png")
+
+    XCTAssertFalse(
+      AnnotateCloudUploadTarget.usesTemporaryRenderedFile(
+        sourceURL: sourceURL,
+        isProtectedManualCombine: false
+      )
+    )
+    XCTAssertTrue(
+      AnnotateCloudUploadTarget.usesTemporaryRenderedFile(
+        sourceURL: sourceURL,
+        isProtectedManualCombine: true
+      )
+    )
+  }
 }
